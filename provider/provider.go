@@ -6,6 +6,7 @@ import (
 
 	"github.com/Murolando/m_ai_provider/entities"
 	int_entities "github.com/Murolando/m_ai_provider/internal/entities"
+	"github.com/Murolando/m_ai_provider/options"
 	"github.com/shopspring/decimal"
 )
 
@@ -13,15 +14,16 @@ import (
 // Провайдер - проводник до модели, будь то владелец модели или другой ai-hub.
 //
 // Поддерживаемые провайдеры:
-//   - openrouter - https://openrouter.ai/ - active
-//   - hydraai - https://hydraai.app/ - active
+//   - openrouter - https://openrouter.ai/ - txt
+//   - hydraai - https://hydraai.app/ - txt, mcp
 type Provider interface {
 	// SendMessage отправляет сообщения в AI модель через провайдера.
 	// ctx - контекст для управления временем жизни запроса
 	// messages - массив сообщений для отправки в модель (история чата)
 	// modelName - название модели для использования
-	// Возвращает ответ от модели с текстом, количеством токенов и стоимостью в рублях
-	SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName) (*entities.ProviderMessageResponseDTO, error)
+	// options - дополнительные опции (MCP tools, температура и т.д.)
+	// Возвращает ответ от модели с текстом, количеством токенов, стоимостью и возможными tool calls
+	SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName, options ...options.SendMessageOption) (*entities.ProviderMessageResponseDTO, error)
 
 	// GetModelInfo получает информацию о конкретной модели.
 	// modelName - название модели для получения информации

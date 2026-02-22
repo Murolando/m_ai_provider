@@ -6,6 +6,7 @@ import (
 	"github.com/Murolando/m_ai_provider/entities"
 	internalEnt "github.com/Murolando/m_ai_provider/internal/entities"
 	"github.com/Murolando/m_ai_provider/internal/utils"
+	"github.com/Murolando/m_ai_provider/options"
 	"github.com/shopspring/decimal"
 )
 
@@ -20,7 +21,7 @@ func NewDefaultProvider() *DefaultProvider {
 }
 
 // SendMessage отправляет сообщения через DefaultProvider (возвращает тестовый ответ).
-func (p *DefaultProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName) (*entities.ProviderMessageResponseDTO, error) {
+func (p *DefaultProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName, options ...options.SendMessageOption) (*entities.ProviderMessageResponseDTO, error) {
 	message := utils.MakeRequestMessageString(messages)
 	return &entities.ProviderMessageResponseDTO{
 		MessageText: "DEFAULT ANSWER FOR " + message,
