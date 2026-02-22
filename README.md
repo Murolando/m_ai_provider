@@ -1,11 +1,15 @@
 # M ai provider
-Единая точка входа для интеграции с разными ИИ системами.
+Единая точка входа для интеграции с разными ИИ системами с поддержкой MCP tools.
 
 Все модели интеграции к провайдерам соответствуют интерфейсу в ```m_ai_provider/provider/provider.go```
 
 ## Список провайдеров:
 * [openrouter](https://openrouter.ai/) - active
-* [hydraai](https://hydraai.app/) - active
+* [hydraai](https://hydraai.app/) - active ✅ MCP tools support
+
+## 🛠️ Поддержка MCP Tools
+
+Проект поддерживает [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) от Anthropic для работы с инструментами. MCP tools автоматически конвертируются в OpenAI формат для совместимости с различными провайдерами(если это потребуется).
 
 ## Примеры использования с Hydra AI
 
@@ -235,3 +239,80 @@ export OPENROUTER_TOKEN="your-openrouter-api-key"
 - `deepseek-v3` - модель DeepSeek v3
 - `gemini-2-0-flash` - быстрая модель Gemini
 - `qwen-3-32b` - модель Qwen 3 32B
+
+## 🛠️ Использование MCP Tools
+
+### Создание и использование MCP инструмента
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+
+    "github.com/Murolando/m_ai_provider/entities"
+    "github.com/Murolando/m_ai_provider/internal/entities/mcp"
+    "github.com/Murolando/m_ai_provider/options"
+    "github.com/Murolando/m_ai_provider/provider"
+)
+
+func main() {
+    // Создаем MCP инструмент для поиска в интернете
+    description := "Search the web for information"
+    queryDesc := "Search query"
+    
+    schema := mcp.NewSchema(mcp.SchemaTypeObject)
+    schema.AddProperty("query", mcp.NewSchemaProperty(mcp.SchemaTypeString, &queryDesc))
+    schema.AddRequired("query")
+    
+    webSearchTool := mcp.NewTool("web_search", &description, schema)
+
+    // Создаем провайдер
+    apiKey := os.Getenv("HYDRAAI_TOKEN")
+    baseURL := os.Getenv("HYDRAAI_URL")
+    
+    provider, err := provider.NewHydraAIProvider(apiKey, baseURL)
+    if err != nil {
+        log.Fatalf("Ошибка создания провайдера: %v", err)
+    }
+
+    // Отправляем сообщение с MCP tools
+    messages := []*entities.Message{
+        {
+            ChatID:      "example-chat",
+            MessageText: "Найди информацию о последних новостях в области ИИ",
+            AuthorType:  entities.AuthorTypeUser,
+            MessageType: entities.MessageText,
+        },
+    }
+
+    ctx := context.Background()
+    response, err := provider.SendMessage(ctx, messages, "claude-3-5-haiku",
+        options.WithMCPTools([]mcp.Tool{webSearchTool}))
+    if err != nil {
+        log.Fatalf("Ошибка отправки сообщения: %v", err)
+    }
+
+    // Проверяем, есть ли вызовы инструментов
+    if len(response.ToolCalls) > 0 {
+        fmt.Println("Модель вызвала инструменты:")
+        for _, toolCall := range response.ToolCalls {
+            fmt.Printf("- %s (ID: %s): %v\n", toolCall.Name, toolCall.ID, toolCall.Arguments)
+            
+            // Здесь можно выполнить реальный поиск и отправить результат обратно
+            if toolCall.Name == "web_search" {
+                query := toolCall.Arguments["query"].(string)
+                fmt.Printf("Выполняем поиск: %s\n", query)
+                // result := performWebSearch(query)
+                // Отправить результат обратно в модель...
+            }
+        }
+    }
+
+    fmt.Printf("Ответ: %s\n", response.MessageText)
+    fmt.Printf("Причина завершения: %s\n", *response.FinishReason)
+}
+```

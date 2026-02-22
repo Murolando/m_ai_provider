@@ -11,6 +11,10 @@ import (
 	"github.com/Murolando/m_ai_provider/entities"
 	"github.com/Murolando/m_ai_provider/internal/config"
 	internalEnt "github.com/Murolando/m_ai_provider/internal/entities"
+	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+	"github.com/Murolando/m_ai_provider/internal/entities/openai"
+	"github.com/Murolando/m_ai_provider/internal/mappers"
+	"github.com/Murolando/m_ai_provider/options"
 	"github.com/shopspring/decimal"
 )
 
@@ -22,9 +26,10 @@ var _ Provider = (*HydraAIProvider)(nil)
 
 // HydraAIProvider представляет провайдера для работы с HydraAI API.
 type HydraAIProvider struct {
-	apiKey   string                                     // API ключ для аутентификации
-	baseURL  string                                     // Базовый URL для API запросов
-	modelMap map[entities.ModelName]*entities.ModelInfo // Кэш информации о моделях
+	apiKey      string                                     // API ключ для аутентификации
+	baseURL     string                                     // Базовый URL для API запросов
+	modelMap    map[entities.ModelName]*entities.ModelInfo // Кэш информации о моделях
+	toolsMapper *mappers.ToolsMapper                       // Маппер для конвертации инструментов
 }
 
 // NewHydraAIProvider создает новый экземпляр HydraAI провайдера.
@@ -41,9 +46,10 @@ func NewHydraAIProvider(apiKey string, baseURL string) (*HydraAIProvider, error)
 	}
 
 	provider := &HydraAIProvider{
-		apiKey:   apiKey,
-		baseURL:  baseURL,
-		modelMap: make(map[entities.ModelName]*entities.ModelInfo),
+		apiKey:      apiKey,
+		baseURL:     baseURL,
+		modelMap:    make(map[entities.ModelName]*entities.ModelInfo),
+		toolsMapper: mappers.NewToolsMapper(),
 	}
 
 	if err := provider.getModels(); err != nil {
@@ -54,7 +60,7 @@ func NewHydraAIProvider(apiKey string, baseURL string) (*HydraAIProvider, error)
 }
 
 // SendMessage отправляет сообщения в AI модель через HydraAI API.
-func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName) (*entities.ProviderMessageResponseDTO, error) {
+func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName, opts ...options.SendMessageOption) (*entities.ProviderMessageResponseDTO, error) {
 	// Получаем модель из маппинга
 	hydraModel, exists := config.HydraNamesMap[modelName]
 	if !exists {
@@ -63,11 +69,23 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 
 	// Конвертируем сообщения в формат HydraAI
 	chatMessages := convertToChatMessages(messages)
-	request := internalEnt.NewChatCompletionRequest(hydraModel, chatMessages)
+	request := internalEnt.NewHydraChatCompletionRequest(hydraModel, chatMessages)
+
+	// Обрабатываем MCP tools опцию если она есть
+	if mcpTools, hasMCPTools := options.ExtractMCPToolsOption(opts); hasMCPTools {
+		// Конвертируем MCP tools в OpenAI формат
+		openaiTools, err := p.toolsMapper.MCPToolsToOpenAI(mcpTools)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert MCP tools to OpenAI: %w", err)
+		}
+
+		// Добавляем инструменты к запросу
+		request.Tools = openaiTools
+		request.ToolChoice = openai.ToolChoiceAuto
+	}
 
 	requestBody, err := json.Marshal(request)
 	if err != nil {
-
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
@@ -97,7 +115,7 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 		return nil, fmt.Errorf("API request failed with status %d: %s", response.StatusCode, string(responseBody))
 	}
 
-	var chatResponse internalEnt.ChatCompletionResponse
+	var chatResponse internalEnt.HydraChatCompletionResponse
 	if err := json.Unmarshal(responseBody, &chatResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -106,39 +124,44 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 		return nil, fmt.Errorf("no choices in response")
 	}
 
-	// Извлекаем текст ответа
 	choice := chatResponse.Choices[0]
-	var messageText string
+	result := &entities.ProviderMessageResponseDTO{
+		TotalTokens:   int64(chatResponse.Usage.TotalTokens),
+		PriceInRubles: decimal.NewFromFloat(chatResponse.Usage.CostRequest).Round(3),
+		FinishReason:  mapFinishReason(choice.FinishReason),
+	}
 
-	// Обрабатываем content как строку или как массив объектов
+	// Обрабатываем tool calls если они есть
+	if len(choice.Message.ToolCalls) > 0 {
+		mcpToolCalls := make([]mcp.ToolCall, len(choice.Message.ToolCalls))
+		for i, toolCall := range choice.Message.ToolCalls {
+			mcpToolCall, err := p.toolsMapper.OpenAIToolCallToMCP(toolCall)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert tool call %d to MCP: %w", i, err)
+			}
+			mcpToolCalls[i] = mcpToolCall
+		}
+		result.ToolCalls = mcpToolCalls
+	}
+
+	// Извлекаем текст ответа если есть
 	switch content := choice.Message.Content.(type) {
 	case string:
-		messageText = content
+		result.MessageText = content
 	case []interface{}:
 		// Если это массив, ищем текстовые элементы
 		for _, item := range content {
 			if itemMap, ok := item.(map[string]interface{}); ok {
 				if itemType, ok := itemMap["type"].(string); ok && itemType == "text" {
 					if text, ok := itemMap["text"].(string); ok {
-						messageText += text
+						result.MessageText += text
 					}
 				}
 			}
 		}
-	default:
-		return nil, fmt.Errorf("unexpected content type in response")
 	}
 
-	var priceInRubles decimal.Decimal
-	if chatResponse.Usage.CostRequest > 0 {
-		priceInRubles = decimal.NewFromFloat(chatResponse.Usage.CostRequest).Round(3)
-	}
-
-	return &entities.ProviderMessageResponseDTO{
-		MessageText:   messageText,
-		TotalTokens:   int64(chatResponse.Usage.TotalTokens),
-		PriceInRubles: priceInRubles,
-	}, nil
+	return result, nil
 }
 
 // GetModelInfo получает информацию о конкретной модели из кэша.
@@ -233,22 +256,46 @@ func (p *HydraAIProvider) calculatePrice(params internalEnt.PricingParams) (deci
 	}
 }
 
-// convertToChatMessages конвертирует внутренние сообщения в формат HydraAI
-func convertToChatMessages(messages []*entities.Message) []internalEnt.ChatMessage {
-	chatMessages := make([]internalEnt.ChatMessage, len(messages))
+// convertToChatMessages конвертирует внутренние сообщения в формат OpenAI/HydraAI
+func convertToChatMessages(messages []*entities.Message) []openai.ChatMessage {
+	chatMessages := make([]openai.ChatMessage, len(messages))
 
 	for i, msg := range messages {
 		var role string
 		switch msg.AuthorType {
 		case entities.AuthorTypeUser:
-			role = internalEnt.RoleUser
+			role = openai.RoleUser
 		case entities.AuthorTypeRobot:
-			role = internalEnt.RoleAssistant
+			role = openai.RoleAssistant
 		default:
-			role = internalEnt.RoleUser // дефолтная роль
+			role = openai.RoleUser // дефолтная роль
 		}
-		chatMessages[i] = internalEnt.NewTextMessage(role, msg.MessageText)
+		chatMessages[i] = openai.NewTextMessage(role, msg.MessageText)
 	}
 
 	return chatMessages
+}
+
+// mapFinishReason маппит OpenAI finish reason в общие константы entities.
+func mapFinishReason(openaiReason *string) *string {
+	if openaiReason == nil {
+		return nil
+	}
+
+	var mappedReason string
+	switch *openaiReason {
+	case openai.FinishReasonStop:
+		mappedReason = entities.FinishReasonStop
+	case openai.FinishReasonLength:
+		mappedReason = entities.FinishReasonLength
+	case openai.FinishReasonToolCalls:
+		mappedReason = entities.FinishReasonToolCalls
+	case openai.FinishReasonContentFilter:
+		mappedReason = entities.FinishReasonContentFilter
+	default:
+		// Если неизвестная причина, возвращаем как есть
+		mappedReason = *openaiReason
+	}
+
+	return &mappedReason
 }

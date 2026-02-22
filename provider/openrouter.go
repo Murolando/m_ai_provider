@@ -9,13 +9,14 @@ import (
 	"github.com/Murolando/m_ai_provider/internal/config"
 	internalEnt "github.com/Murolando/m_ai_provider/internal/entities"
 	"github.com/Murolando/m_ai_provider/internal/utils"
+	"github.com/Murolando/m_ai_provider/options"
 	"github.com/revrost/go-openrouter"
 	"github.com/shopspring/decimal"
 )
 
 // Константы для провайдера OpenRouter
 const (
-	openRouterProviderName = "OpenRouter"
+	openRouterProviderName     = "OpenRouter"
 	defaultUSDToRUBRateOnError = 80.0
 )
 
@@ -24,7 +25,7 @@ var _ Provider = (*OpenRouterProvider)(nil)
 
 // OpenRouterProvider представляет провайдера для работы с OpenRouter API.
 type OpenRouterProvider struct {
-	client   *openrouter.Client                        // HTTP клиент для работы с OpenRouter API
+	client   *openrouter.Client                         // HTTP клиент для работы с OpenRouter API
 	modelMap map[entities.ModelName]*entities.ModelInfo // Кэш информации о моделях
 }
 
@@ -51,7 +52,7 @@ func NewOpenRouterProvider(token string) (*OpenRouterProvider, error) {
 }
 
 // SendMessage отправляет сообщения в AI модель через OpenRouter API.
-func (p *OpenRouterProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName) (*entities.ProviderMessageResponseDTO, error) {
+func (p *OpenRouterProvider) SendMessage(ctx context.Context, messages []*entities.Message, modelName entities.ModelName, options ...options.SendMessageOption) (*entities.ProviderMessageResponseDTO, error) {
 	openRouterModel, exists := config.OpenRouterNamesMap[modelName]
 	if !exists {
 		return nil, fmt.Errorf("model %s not supported by %s provider", modelName, openRouterProviderName)

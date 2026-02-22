@@ -1,7 +1,10 @@
 // Package entities содержит основные структуры данных для работы с AI провайдерами.
 package entities
 
-import "github.com/shopspring/decimal"
+import (
+	"github.com/shopspring/decimal"
+	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+)
 
 // ModelName представляет название модели AI.
 type ModelName string
@@ -16,6 +19,16 @@ const (
 	MessageText = "message_text"
 	// MessageImage представляет тип сообщения - изображение.
 	MessageImage = "message_image"
+
+	// Константы для причин завершения генерации
+	// FinishReasonStop естественное завершение генерации
+	FinishReasonStop = "stop"
+	// FinishReasonLength достигнут лимит максимального количества токенов
+	FinishReasonLength = "length"
+	// FinishReasonToolCalls модель вызвала инструмент
+	FinishReasonToolCalls = "tool_calls"
+	// FinishReasonContentFilter контент отфильтрован
+	FinishReasonContentFilter = "content_filter"
 )
 
 // ModelInfo содержит информацию о модели AI.
@@ -35,7 +48,11 @@ type Message struct {
 
 // ProviderMessageResponseDTO содержит ответ от AI провайдера.
 type ProviderMessageResponseDTO struct {
-	MessageText   string          // Текст ответа от AI модели
-	TotalTokens   int64           // Общее количество использованных токенов
-	PriceInRubles decimal.Decimal // Стоимость запроса в рублях
+	MessageText   string          `json:"message_text"`             // Текст ответа от AI модели
+	TotalTokens   int64           `json:"total_tokens"`             // Общее количество использованных токенов
+	PriceInRubles decimal.Decimal `json:"price_in_rubles"`          // Стоимость запроса в рублях
+	
+	// Новые поля для поддержки MCP tool calls
+	ToolCalls     []mcp.ToolCall  `json:"tool_calls,omitempty"`     // Вызовы инструментов в MCP формате
+	FinishReason  *string         `json:"finish_reason,omitempty"`  // Причина завершения (stop, tool_calls, length, etc.)
 }
