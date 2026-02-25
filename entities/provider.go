@@ -2,8 +2,8 @@
 package entities
 
 import (
+	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/shopspring/decimal"
-	"github.com/Murolando/m_ai_provider/entities/mcp"
 )
 
 // ModelName представляет название модели AI.
@@ -48,11 +48,11 @@ type Message struct {
 
 // ProviderMessageResponseDTO содержит ответ от AI провайдера.
 type ProviderMessageResponseDTO struct {
-	MessageText   string          `json:"message_text"`             // Текст ответа от AI модели
-	TotalTokens   int64           `json:"total_tokens"`             // Общее количество использованных токенов
-	PriceInRubles decimal.Decimal `json:"price_in_rubles"`          // Стоимость запроса в рублях
-	
+	MessageText   string          `json:"message_text"`    // Текст ответа от AI модели
+	TotalTokens   int64           `json:"total_tokens"`    // Общее количество использованных токенов
+	PriceInRubles decimal.Decimal `json:"price_in_rubles"` // Стоимость запроса в рублях
+
 	// Новые поля для поддержки MCP tool calls
-	ToolCalls     []mcp.ToolCall  `json:"tool_calls,omitempty"`     // Вызовы инструментов в MCP формате
-	FinishReason  *string         `json:"finish_reason,omitempty"`  // Причина завершения (stop, tool_calls, length, etc.)
+	ToolCalls    []mcpgo.CallToolRequest `json:"tool_calls,omitempty"`    // Вызовы инструментов в MCP формате
+	FinishReason *string                 `json:"finish_reason,omitempty"` // Причина завершения (stop, tool_calls, length, etc.)
 }

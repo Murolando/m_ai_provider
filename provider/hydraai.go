@@ -9,12 +9,12 @@ import (
 	"net/http"
 
 	"github.com/Murolando/m_ai_provider/entities"
-	"github.com/Murolando/m_ai_provider/entities/mcp"
 	"github.com/Murolando/m_ai_provider/internal/config"
 	internalEnt "github.com/Murolando/m_ai_provider/internal/entities"
 	"github.com/Murolando/m_ai_provider/internal/entities/openai"
 	"github.com/Murolando/m_ai_provider/internal/mappers"
 	"github.com/Murolando/m_ai_provider/options"
+	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/shopspring/decimal"
 )
 
@@ -133,7 +133,7 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 
 	// Обрабатываем tool calls если они есть
 	if len(choice.Message.ToolCalls) > 0 {
-		mcpToolCalls := make([]mcp.ToolCall, len(choice.Message.ToolCalls))
+		mcpToolCalls := make([]mcpgo.CallToolRequest, len(choice.Message.ToolCalls))
 		for i, toolCall := range choice.Message.ToolCalls {
 			mcpToolCall, err := p.toolsMapper.OpenAIToolCallToMCP(toolCall)
 			if err != nil {
