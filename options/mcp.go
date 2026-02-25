@@ -1,6 +1,6 @@
 package options
 
-import "github.com/Murolando/m_ai_provider/internal/entities/mcp"
+import "github.com/Murolando/m_ai_provider/entities/mcp"
 
 // MCPToolsOption опция для передачи MCP инструментов.
 // Каждый провайдер может по-своему обработать эти инструменты:

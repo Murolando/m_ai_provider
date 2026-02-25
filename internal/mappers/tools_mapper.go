@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+	"github.com/Murolando/m_ai_provider/entities/mcp"
 	"github.com/Murolando/m_ai_provider/internal/entities/openai"
 )
 

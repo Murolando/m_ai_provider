@@ -3,7 +3,7 @@ package mappers
 import (
 	"testing"
 
-	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+	"github.com/Murolando/m_ai_provider/entities/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 )
 

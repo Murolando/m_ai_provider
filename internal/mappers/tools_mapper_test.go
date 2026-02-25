@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+	"github.com/Murolando/m_ai_provider/entities/mcp"
 	"github.com/Murolando/m_ai_provider/internal/entities/openai"
 )
 
@@ -259,12 +259,12 @@ func TestToolsMapper_RoundTrip(t *testing.T) {
 
 	// Проверяем, что основные поля сохранились
 	if convertedTool.Function.Name != originalTool.Function.Name {
-		t.Errorf("Name mismatch: expected '%s', got '%s'", 
+		t.Errorf("Name mismatch: expected '%s', got '%s'",
 			originalTool.Function.Name, convertedTool.Function.Name)
 	}
 
 	if *convertedTool.Function.Description != *originalTool.Function.Description {
-		t.Errorf("Description mismatch: expected '%s', got '%s'", 
+		t.Errorf("Description mismatch: expected '%s', got '%s'",
 			*originalTool.Function.Description, *convertedTool.Function.Description)
 	}
 }
