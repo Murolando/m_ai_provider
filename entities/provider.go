@@ -3,7 +3,7 @@ package entities
 
 import (
 	"github.com/shopspring/decimal"
-	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
+	"github.com/Murolando/m_ai_provider/entities/mcp"
 )
 
 // ModelName представляет название модели AI.

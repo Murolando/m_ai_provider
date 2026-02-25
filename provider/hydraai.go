@@ -9,9 +9,9 @@ import (
 	"net/http"
 
 	"github.com/Murolando/m_ai_provider/entities"
+	"github.com/Murolando/m_ai_provider/entities/mcp"
 	"github.com/Murolando/m_ai_provider/internal/config"
 	internalEnt "github.com/Murolando/m_ai_provider/internal/entities"
-	"github.com/Murolando/m_ai_provider/internal/entities/mcp"
 	"github.com/Murolando/m_ai_provider/internal/entities/openai"
 	"github.com/Murolando/m_ai_provider/internal/mappers"
 	"github.com/Murolando/m_ai_provider/options"
