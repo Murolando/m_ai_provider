@@ -14,6 +14,8 @@ const (
 	AuthorTypeUser = "user"
 	// AuthorTypeRobot представляет тип автора сообщения - AI ассистент.
 	AuthorTypeRobot = "terminator"
+	// AuthorTypeTool представляет тип автора сообщения - результат выполнения инструмента.
+	AuthorTypeTool = "tool"
 
 	// MessageText представляет тип сообщения - текст.
 	MessageText = "message_text"
@@ -44,6 +46,8 @@ type Message struct {
 	MessageText string `json:"message_text" db:"message_text"` // Текст сообщения
 	AuthorType  string `json:"author_type" db:"author"`        // Тип автора сообщения
 	MessageType string `json:"message_type" db:"message_type"` // Тип сообщения
+
+	ToolCallID *string `json:"tool_call_id,omitempty" db:"tool_call_id"` // ID вызова инструмента (для AuthorTypeTool)
 }
 
 // ProviderMessageResponseDTO содержит ответ от AI провайдера.
