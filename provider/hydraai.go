@@ -267,10 +267,17 @@ func convertToChatMessages(messages []*entities.Message) []openai.ChatMessage {
 			role = openai.RoleUser
 		case entities.AuthorTypeRobot:
 			role = openai.RoleAssistant
+		case entities.AuthorTypeTool:
+			role = openai.RoleTool
 		default:
 			role = openai.RoleUser // дефолтная роль
 		}
 		chatMessages[i] = openai.NewTextMessage(role, msg.MessageText)
+
+		// Для сообщений с ролью tool нужно установить ToolCallID
+		if msg.AuthorType == entities.AuthorTypeTool && msg.ToolCallID != nil {
+			chatMessages[i].ToolCallID = msg.ToolCallID
+		}
 	}
 
 	return chatMessages
