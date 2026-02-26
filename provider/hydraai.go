@@ -22,10 +22,6 @@ const (
 	hydraAIProviderName = "HydraAI"
 )
 
-var (
-	fakeCallID = "123321"
-)
-
 var _ Provider = (*HydraAIProvider)(nil)
 
 // HydraAIProvider представляет провайдера для работы с HydraAI API.
@@ -72,7 +68,11 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 	}
 
 	// Конвертируем сообщения в формат HydraAI
-	chatMessages := convertToChatMessages(messages)
+	chatMessages, err := p.convertToChatMessages(messages)
+	if err != nil {
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to convert messages: %w. Messages: %s", err, string(messagesJSON))
+	}
 	request := internalEnt.NewHydraChatCompletionRequest(hydraModel, chatMessages)
 
 	// Обрабатываем MCP tools опцию если она есть
@@ -80,7 +80,8 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 		// Конвертируем MCP tools в OpenAI формат
 		openaiTools, err := p.toolsMapper.MCPToolsToOpenAI(mcpTools)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert MCP tools to OpenAI: %w", err)
+			messagesJSON, _ := json.Marshal(messages)
+			return nil, fmt.Errorf("failed to convert MCP tools to OpenAI: %w. Messages: %s", err, string(messagesJSON))
 		}
 
 		// Добавляем инструменты к запросу
@@ -90,14 +91,15 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 
 	requestBody, err := json.Marshal(request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to marshal request: %w. Messages: %s", err, string(messagesJSON))
 	}
 
 	url := p.baseURL + "/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(requestBody))
 	if err != nil {
-
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to create request: %w. Messages: %s", err, string(messagesJSON))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -106,26 +108,31 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 	// Выполняем запрос
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to send request: %w. Messages: %s", err, string(messagesJSON))
 	}
 	defer response.Body.Close()
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to read response: %w. Messages: %s", err, string(messagesJSON))
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", response.StatusCode, string(responseBody))
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("API request failed with status %d: %s. Messages: %s", response.StatusCode, string(responseBody), string(messagesJSON))
 	}
 
 	var chatResponse internalEnt.HydraChatCompletionResponse
 	if err := json.Unmarshal(responseBody, &chatResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("failed to unmarshal response: %w. Messages: %s", err, string(messagesJSON))
 	}
 
 	if len(chatResponse.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in response")
+		messagesJSON, _ := json.Marshal(messages)
+		return nil, fmt.Errorf("no choices in response. Messages: %s", string(messagesJSON))
 	}
 
 	choice := chatResponse.Choices[0]
@@ -138,14 +145,20 @@ func (p *HydraAIProvider) SendMessage(ctx context.Context, messages []*entities.
 	// Обрабатываем tool calls если они есть
 	if len(choice.Message.ToolCalls) > 0 {
 		mcpToolCalls := make([]mcpgo.CallToolRequest, len(choice.Message.ToolCalls))
+		toolCallIDs := make([]string, len(choice.Message.ToolCalls))
+
 		for i, toolCall := range choice.Message.ToolCalls {
 			mcpToolCall, err := p.toolsMapper.OpenAIToolCallToMCP(toolCall)
 			if err != nil {
-				return nil, fmt.Errorf("failed to convert tool call %d to MCP: %w", i, err)
+				messagesJSON, _ := json.Marshal(messages)
+				return nil, fmt.Errorf("failed to convert tool call %d to MCP: %w. Messages: %s", i, err, string(messagesJSON))
 			}
 			mcpToolCalls[i] = mcpToolCall
+			toolCallIDs[i] = toolCall.ID // Извлекаем ID из OpenAI ToolCall
 		}
+
 		result.ToolCalls = mcpToolCalls
+		result.ToolCallIDs = toolCallIDs // Сохраняем массив ID
 	}
 
 	// Извлекаем текст ответа если есть
@@ -261,7 +274,7 @@ func (p *HydraAIProvider) calculatePrice(params internalEnt.PricingParams) (deci
 }
 
 // convertToChatMessages конвертирует внутренние сообщения в формат OpenAI/HydraAI
-func convertToChatMessages(messages []*entities.Message) []openai.ChatMessage {
+func (p *HydraAIProvider) convertToChatMessages(messages []*entities.Message) ([]openai.ChatMessage, error) {
 	chatMessages := make([]openai.ChatMessage, len(messages))
 
 	for i, msg := range messages {
@@ -271,23 +284,32 @@ func convertToChatMessages(messages []*entities.Message) []openai.ChatMessage {
 			role = openai.RoleUser
 		case entities.AuthorTypeRobot:
 			role = openai.RoleAssistant
-			chatMessages[i].ToolCallID = &fakeCallID
+			// Создаем базовое сообщение
+			chatMessages[i] = openai.NewTextMessage(role, msg.MessageText)
+			// Добавляем tool calls если они есть
+			if len(msg.ToolCalls) > 0 {
+				openaiToolCalls := make([]openai.ToolCall, len(msg.ToolCalls))
+				for j, mcpCall := range msg.ToolCalls {
+					openaiToolCall, err := p.toolsMapper.MCPToolCallToOpenAI(mcpCall)
+					if err != nil {
+						return nil, fmt.Errorf("failed to convert MCP tool call %d to OpenAI: %w", j, err)
+					}
+					// Используем сохраненный ID
+					openaiToolCall.ID = msg.ToolCallIDs[j]
+					openaiToolCalls[j] = openaiToolCall
+				}
+				chatMessages[i].ToolCalls = openaiToolCalls
+			}
+			continue
 		case entities.AuthorTypeTool:
 			role = openai.RoleTool
-			chatMessages[i].ToolCallID = &fakeCallID
 		default:
 			role = openai.RoleUser // дефолтная роль
 		}
 		chatMessages[i] = openai.NewTextMessage(role, msg.MessageText)
-
-		// Для сообщений с ролью tool нужно установить ToolCallID он не отдается в дефолтном mcpgo
-		// поэтому обходить это буду путем создания уникальной пары значений
-		if msg.AuthorType == entities.AuthorTypeTool && msg.ToolCallID != nil {
-			chatMessages[i].ToolCallID = msg.ToolCallID
-		}
 	}
 
-	return chatMessages
+	return chatMessages, nil
 }
 
 // mapFinishReason маппит OpenAI finish reason в общие константы entities.

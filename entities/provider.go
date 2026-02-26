@@ -47,7 +47,8 @@ type Message struct {
 	AuthorType  string `json:"author_type" db:"author"`        // Тип автора сообщения
 	MessageType string `json:"message_type" db:"message_type"` // Тип сообщения
 
-	ToolCallID *string `json:"tool_call_id,omitempty" db:"tool_call_id"` // ID вызова инструмента (для AuthorTypeTool)
+	ToolCalls   []mcpgo.CallToolRequest `json:"tool_calls,omitempty"`                       // Вызовы инструментов (для AuthorTypeRobot)
+	ToolCallIDs []string                `json:"tool_call_ids,omitempty"`                    // ID вызовов инструментов (для AuthorTypeRobot)
 }
 
 // ProviderMessageResponseDTO содержит ответ от AI провайдера.
@@ -57,6 +58,7 @@ type ProviderMessageResponseDTO struct {
 	PriceInRubles decimal.Decimal `json:"price_in_rubles"` // Стоимость запроса в рублях
 
 	// Новые поля для поддержки MCP tool calls
-	ToolCalls    []mcpgo.CallToolRequest `json:"tool_calls,omitempty"`    // Вызовы инструментов в MCP формате
-	FinishReason *string                 `json:"finish_reason,omitempty"` // Причина завершения (stop, tool_calls, length, etc.)
+	ToolCalls    []mcpgo.CallToolRequest `json:"tool_calls,omitempty"`     // Вызовы инструментов в MCP формате
+	ToolCallIDs  []string                `json:"tool_call_ids,omitempty"`  // ID вызовов инструментов от модели
+	FinishReason *string                 `json:"finish_reason,omitempty"`  // Причина завершения (stop, tool_calls, length, etc.)
 }
