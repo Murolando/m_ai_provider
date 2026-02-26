@@ -302,7 +302,16 @@ func (p *HydraAIProvider) convertToChatMessages(messages []*entities.Message) ([
 			}
 			continue
 		case entities.AuthorTypeTool:
-			role = openai.RoleTool
+			// Для tool сообщений создаем специальное сообщение с tool_call_id
+			if msg.ToolCallIDs[0] == "" {
+				return nil, fmt.Errorf("tool message at index %d missing tool_call_id", i)
+			}
+			chatMessages[i] = openai.ChatMessage{
+				Role:       openai.RoleTool,
+				Content:    msg.MessageText,
+				ToolCallID: &msg.ToolCallIDs[0],
+			}
+			continue
 		default:
 			role = openai.RoleUser // дефолтная роль
 		}
