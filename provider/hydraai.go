@@ -22,6 +22,10 @@ const (
 	hydraAIProviderName = "HydraAI"
 )
 
+var (
+	fakeCallID = "123321"
+)
+
 var _ Provider = (*HydraAIProvider)(nil)
 
 // HydraAIProvider представляет провайдера для работы с HydraAI API.
@@ -267,14 +271,17 @@ func convertToChatMessages(messages []*entities.Message) []openai.ChatMessage {
 			role = openai.RoleUser
 		case entities.AuthorTypeRobot:
 			role = openai.RoleAssistant
+			chatMessages[i].ToolCallID = &fakeCallID
 		case entities.AuthorTypeTool:
 			role = openai.RoleTool
+			chatMessages[i].ToolCallID = &fakeCallID
 		default:
 			role = openai.RoleUser // дефолтная роль
 		}
 		chatMessages[i] = openai.NewTextMessage(role, msg.MessageText)
 
-		// Для сообщений с ролью tool нужно установить ToolCallID
+		// Для сообщений с ролью tool нужно установить ToolCallID он не отдается в дефолтном mcpgo
+		// поэтому обходить это буду путем создания уникальной пары значений
 		if msg.AuthorType == entities.AuthorTypeTool && msg.ToolCallID != nil {
 			chatMessages[i].ToolCallID = msg.ToolCallID
 		}
